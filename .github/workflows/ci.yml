@@ -41,16 +41,24 @@ jobs:
         run: npm test
 
       - name: Start DynamoDB Local
-        run: docker compose -f compose.yaml up -d
+        run: |
+          docker run -d --name ci-dynamodb \
+            -p 127.0.0.1:8000:8000 \
+            amazon/dynamodb-local:latest \
+            -jar DynamoDBLocal.jar -inMemory -sharedDb
 
       - name: Wait for DynamoDB Local
         run: |
-          for attempt in {1..30}; do
-            if aws dynamodb list-tables --endpoint-url http://127.0.0.1:8000 --no-cli-pager; then
+          for attempt in {1..15}; do
+            if AWS_MAX_ATTEMPTS=1 aws dynamodb list-tables \
+              --endpoint-url http://127.0.0.1:8000 \
+              --cli-connect-timeout 2 --cli-read-timeout 2 \
+              --no-cli-pager; then
               exit 0
             fi
             sleep 1
           done
+          docker logs ci-dynamodb
           exit 1
 
       - name: Create test tables
